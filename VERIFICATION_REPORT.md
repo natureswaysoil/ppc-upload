@@ -429,7 +429,7 @@ The repository contains **fully functional** Amazon PPC optimization tools:
 ## Version Information
 
 - **Test Date:** December 6, 2024
-- **Python Version Tested:** Python 3.x
+- **Python Version Tested:** Python 3.12.3
 - **Node.js Dashboard:** Next.js 14.2.28
 - **Repository:** natureswaysoil/ppc-upload
 

@@ -25,6 +25,11 @@ import subprocess
 import tempfile
 from typing import List, Dict, Tuple
 
+# Constants
+MAX_ALLOWED_ERRORS = 5  # Maximum Python syntax errors before marking as failed
+TEST_TIMEOUT_SECONDS = 30  # Timeout for test script execution
+EXCLUDED_JSON_PATTERNS = ['package.json', 'package-lock.json']  # JSON files to skip validation
+
 # Color codes for terminal output
 GREEN = '\033[92m'
 RED = '\033[91m'
@@ -231,8 +236,8 @@ class RepositoryVerifier:
         
         # Check JSON files
         json_files = list(Path(self.temp_dir).rglob("*.json"))
-        # Exclude package.json from this check as it's validated separately
-        json_files = [f for f in json_files if 'package.json' not in str(f) and 'package-lock.json' not in str(f)]
+        # Exclude certain JSON files that are validated separately
+        json_files = [f for f in json_files if not any(pattern in str(f) for pattern in EXCLUDED_JSON_PATTERNS)]
         
         for json_file in json_files:
             try:
@@ -298,7 +303,7 @@ class RepositoryVerifier:
                     cwd=test_file.parent,
                     capture_output=True,
                     text=True,
-                    timeout=30
+                    timeout=TEST_TIMEOUT_SECONDS
                 )
                 
                 if result.returncode == 0:
@@ -376,7 +381,7 @@ class RepositoryVerifier:
         if len(self.results['issues']) == 0:
             print_success("✅ ALL VERIFICATIONS PASSED")
             return True
-        elif py_errors <= 5:  # Allow some v2 errors
+        elif py_errors <= MAX_ALLOWED_ERRORS:  # Allow some v2 errors
             print_warning("⚠️  MOSTLY FUNCTIONAL (minor issues found)")
             print_info("Production v1 scripts are fully functional")
             return True
