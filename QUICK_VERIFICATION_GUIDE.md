@@ -61,14 +61,33 @@ python test_ppc_code.py
 ✅ All tests passed! Code is ready for deployment.
 ```
 
-### Step 4: Validate Syntax
+### Step 4: Test Amazon API Connection (Optional)
+
+If you have Amazon API credentials configured:
+
+```bash
+# Copy the connection test script
+cp ../test_amazon_connection.py .
+
+# Test the connection
+python test_amazon_connection.py --config config.json
+```
+
+**Expected Output:**
+```
+✅ Access token obtained (expires in 3600 seconds)
+✅ Profiles API responded successfully
+🎉 Amazon Advertising API connection is working!
+```
+
+### Step 5: Validate Syntax
 
 ```bash
 python -m py_compile amazon_ppc_optimizer.py
 echo $?  # Should output: 0
 ```
 
-### Step 5: Check Configuration
+### Step 6: Check Configuration
 
 ```bash
 python -c "import json; json.load(open('config.json')); print('✅ Valid JSON')"

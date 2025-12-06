@@ -40,12 +40,18 @@ This repository contains **5 comprehensive packages** for Amazon PPC optimizatio
 3. **Configure API credentials:**
    Edit `config.json` with your Amazon Advertising API credentials
 
-4. **Test with dry-run:**
+4. **Test Amazon API connection:**
+   ```bash
+   python test_amazon_connection.py --config config.json
+   ```
+   This verifies your credentials and API access before running the optimizer.
+
+5. **Test with dry-run:**
    ```bash
    python amazon_ppc_optimizer.py --config config.json --profile-id YOUR_PROFILE_ID --dry-run
    ```
 
-5. **Run live:**
+6. **Run live:**
    ```bash
    python amazon_ppc_optimizer.py --config config.json --profile-id YOUR_PROFILE_ID
    ```
@@ -250,6 +256,33 @@ Based on typical implementations:
 ---
 
 ## 🧪 Testing
+
+### Test Amazon API Connection
+
+**NEW:** Before running the optimizer, test your Amazon API connection:
+
+```bash
+# Test connection with config file
+python3 test_amazon_connection.py --config config.json
+
+# Test connection and specific profile
+python3 test_amazon_connection.py --config config.json --profile-id YOUR_PROFILE_ID
+```
+
+The connection test verifies:
+- ✅ OAuth authentication (access token retrieval)
+- ✅ API credentials validity
+- ✅ Profiles API accessibility
+- ✅ Specific profile access (if profile ID provided)
+- ✅ Network connectivity to Amazon endpoints
+
+**Output Example:**
+```
+✅ Access token obtained (expires in 3600 seconds)
+✅ Profiles API responded successfully (2 profiles found)
+✅ Profile access successful
+🎉 Amazon Advertising API connection is working!
+```
 
 ### Run Verification Script
 
