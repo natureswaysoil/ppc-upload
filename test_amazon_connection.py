@@ -268,7 +268,6 @@ def main():
         print_warning("  - Access token is valid but API permissions are insufficient")
         print_warning("  - Account not properly set up for Advertising API")
         profile_test_passed = False
-        sys.exit(1)
     
     # Display profiles if any
     if profiles:
