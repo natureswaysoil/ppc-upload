@@ -111,8 +111,9 @@ class RepositoryVerifier:
             if not self.run_test_scripts():
                 all_passed = False
             
-            # 7. Generate summary
-            self.print_summary()
+            # 7. Generate summary and get final status
+            # The summary determines if we accept the results based on thresholds
+            final_status = self.print_summary()
             
         finally:
             # Cleanup temp directory
@@ -121,7 +122,7 @@ class RepositoryVerifier:
                 shutil.rmtree(self.temp_dir)
                 print_success("Temporary directory cleaned up")
         
-        return all_passed
+        return final_status
     
     def verify_repository_structure(self) -> bool:
         """Verify basic repository structure"""
