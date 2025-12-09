@@ -181,7 +181,9 @@ Your `config.json` should contain valid Amazon API credentials:
 | `profile_id` | Your advertising profile ID | `"1234567890"` |
 | `client_id` | OAuth client ID from Amazon | `"amzn1.application-oa2-client.xxx"` |
 | `client_secret` | OAuth client secret | Your secret key |
-| `refresh_token` | OAuth refresh token | `"Atzr\|IwEBIxxx"` |
+| `refresh_token` | OAuth refresh token | `"Atzr|IwEBIxxx"` |
+
+> **Note:** The backslash in the markdown example above was only for table formatting. Your actual refresh token does not include a backslash.
 
 ---
 

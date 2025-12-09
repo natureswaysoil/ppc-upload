@@ -123,7 +123,7 @@ def get_access_token(client_id: str, client_secret: str, refresh_token: str) -> 
         return None, f"Unexpected error: {str(e)}"
 
 
-def test_profiles_api(access_token: str, region: str) -> Tuple[bool, Optional[str], Optional[list]]:
+def test_profiles_api(access_token: str, region: str, client_id: str) -> Tuple[bool, Optional[str], Optional[list]]:
     """
     Test the profiles API endpoint
     
@@ -138,7 +138,7 @@ def test_profiles_api(access_token: str, region: str) -> Tuple[bool, Optional[st
         
         headers = {
             'Authorization': f'Bearer {access_token}',
-            'Amazon-Advertising-API-ClientId': 'test-client',
+            'Amazon-Advertising-API-ClientId': client_id,
             'User-Agent': USER_AGENT,
             'Content-Type': 'application/json'
         }
@@ -161,7 +161,7 @@ def test_profiles_api(access_token: str, region: str) -> Tuple[bool, Optional[st
         return False, f"Unexpected error: {str(e)}", None
 
 
-def test_specific_profile(access_token: str, region: str, profile_id: str) -> Tuple[bool, Optional[str], Optional[Dict]]:
+def test_specific_profile(access_token: str, region: str, profile_id: str, client_id: str) -> Tuple[bool, Optional[str], Optional[Dict]]:
     """
     Test access to a specific profile
     
@@ -176,7 +176,7 @@ def test_specific_profile(access_token: str, region: str, profile_id: str) -> Tu
         
         headers = {
             'Authorization': f'Bearer {access_token}',
-            'Amazon-Advertising-API-ClientId': 'test-client',
+            'Amazon-Advertising-API-ClientId': client_id,
             'Amazon-Advertising-API-Scope': profile_id,
             'User-Agent': USER_AGENT,
             'Content-Type': 'application/json'
@@ -259,13 +259,15 @@ def main():
     
     # Step 3: Test profiles API
     print_header("Step 2: Testing Profiles API")
-    success, error, profiles = test_profiles_api(access_token, region)
+    profile_test_passed = True
+    success, error, profiles = test_profiles_api(access_token, region, client_id)
     
     if not success:
         print_error(f"Profiles API test failed: {error}")
         print_warning("This may indicate:")
         print_warning("  - Access token is valid but API permissions are insufficient")
         print_warning("  - Account not properly set up for Advertising API")
+        profile_test_passed = False
         sys.exit(1)
     
     # Display profiles if any
@@ -289,12 +291,13 @@ def main():
     
     if profile_to_test and profile_to_test != 'YOUR_PROFILE_ID_HERE':
         print_header("Step 3: Testing Specific Profile Access")
-        success, error, profile_data = test_specific_profile(access_token, region, profile_to_test)
+        success, error, profile_data = test_specific_profile(access_token, region, profile_to_test, client_id)
         
         if not success:
             print_error(f"Profile access test failed: {error}")
             print_warning(f"Unable to access profile: {profile_to_test}")
             print_warning("Check that the profile ID is correct")
+            profile_test_passed = False
         else:
             print_success(f"Successfully accessed profile: {profile_to_test}")
             if profile_data:
@@ -310,16 +313,27 @@ def main():
     # Final summary
     print_header("Connection Test Summary")
     print_success("✅ OAuth authentication successful")
-    print_success("✅ Profiles API accessible")
+    
+    if profile_test_passed:
+        print_success("✅ Profiles API accessible")
+    else:
+        print_error("❌ Profiles API test failed")
     
     if profile_to_test and profile_to_test != 'YOUR_PROFILE_ID_HERE':
-        print_success("✅ Profile access verified")
+        if profile_test_passed:
+            print_success("✅ Profile access verified")
+        else:
+            print_error("❌ Profile access test failed")
     
     print()
-    print_success("🎉 Amazon Advertising API connection is working!")
-    print_info("You can now run the PPC optimizer with confidence")
-    
-    return 0
+    if profile_test_passed:
+        print_success("🎉 Amazon Advertising API connection is working!")
+        print_info("You can now run the PPC optimizer with confidence")
+        return 0
+    else:
+        print_error("❌ Connection test failed")
+        print_warning("Please review the errors above and fix the issues before proceeding")
+        return 1
 
 
 if __name__ == '__main__':
