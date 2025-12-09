@@ -15,6 +15,8 @@ import time
 
 # Get port from environment variable (Cloud Run sets PORT=8080)
 PORT = int(os.environ.get('PORT', 8080))
+# Verification timeout (default 120 seconds, configurable via environment)
+VERIFICATION_TIMEOUT = int(os.environ.get('VERIFICATION_TIMEOUT', 120))
 
 class RepositoryServerHandler(BaseHTTPRequestHandler):
     """HTTP request handler for repository server"""
@@ -115,12 +117,16 @@ def run_verification_background():
         print("Running background verification...")
         RepositoryServerHandler.verification_running = True
         
+        # Get the directory where server.py is located
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        verify_script = os.path.join(script_dir, 'verify_repository.py')
+        
         # Run verification script
         result = subprocess.run(
-            [sys.executable, 'verify_repository.py'],
+            [sys.executable, verify_script],
             capture_output=True,
             text=True,
-            timeout=60
+            timeout=VERIFICATION_TIMEOUT
         )
         
         RepositoryServerHandler.verification_results = {
