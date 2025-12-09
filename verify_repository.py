@@ -18,12 +18,12 @@ Usage:
 import argparse
 import json
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
-import subprocess
-import tempfile
-import shutil
 from typing import List, Dict, Tuple
 
 # Try to import yaml once at module level for efficiency
@@ -115,7 +115,7 @@ class RepositoryVerifier:
             self.print_summary()
             
         finally:
-            # 8. Cleanup temp directory
+            # Cleanup temp directory
             if self.temp_dir and os.path.exists(self.temp_dir):
                 print_info(f"Cleaning up temporary directory: {self.temp_dir}")
                 shutil.rmtree(self.temp_dir)

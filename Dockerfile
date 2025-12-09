@@ -17,11 +17,14 @@ COPY . /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Unzip all repository ZIP files during build
-RUN for zipfile in *.zip; do \
-    if [ -f "$zipfile" ]; then \
-        echo "Extracting $zipfile..."; \
-        unzip -q "$zipfile" -d "/app/extracted/$(basename "$zipfile" .zip)" || true; \
-    fi \
+RUN mkdir -p /app/extracted && \
+    for zipfile in *.zip; do \
+        if [ -f "$zipfile" ]; then \
+            echo "Extracting $zipfile..."; \
+            if ! unzip -q "$zipfile" -d "/app/extracted/$(basename "$zipfile" .zip)"; then \
+                echo "Warning: Failed to extract $zipfile"; \
+            fi; \
+        fi \
     done
 
 # Set environment variables
