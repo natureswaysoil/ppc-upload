@@ -123,7 +123,7 @@ def get_access_token(client_id: str, client_secret: str, refresh_token: str) -> 
         return None, f"Unexpected error: {str(e)}"
 
 
-def test_profiles_api(access_token: str, region: str) -> Tuple[bool, Optional[str], Optional[list]]:
+def test_profiles_api(access_token: str, region: str, client_id: str) -> Tuple[bool, Optional[str], Optional[list]]:
     """
     Test the profiles API endpoint
     
@@ -138,7 +138,7 @@ def test_profiles_api(access_token: str, region: str) -> Tuple[bool, Optional[st
         
         headers = {
             'Authorization': f'Bearer {access_token}',
-            'Amazon-Advertising-API-ClientId': 'test-client',
+            'Amazon-Advertising-API-ClientId': client_id,
             'User-Agent': USER_AGENT,
             'Content-Type': 'application/json'
         }
@@ -161,7 +161,7 @@ def test_profiles_api(access_token: str, region: str) -> Tuple[bool, Optional[st
         return False, f"Unexpected error: {str(e)}", None
 
 
-def test_specific_profile(access_token: str, region: str, profile_id: str) -> Tuple[bool, Optional[str], Optional[Dict]]:
+def test_specific_profile(access_token: str, region: str, profile_id: str, client_id: str) -> Tuple[bool, Optional[str], Optional[Dict]]:
     """
     Test access to a specific profile
     
@@ -176,7 +176,7 @@ def test_specific_profile(access_token: str, region: str, profile_id: str) -> Tu
         
         headers = {
             'Authorization': f'Bearer {access_token}',
-            'Amazon-Advertising-API-ClientId': 'test-client',
+            'Amazon-Advertising-API-ClientId': client_id,
             'Amazon-Advertising-API-Scope': profile_id,
             'User-Agent': USER_AGENT,
             'Content-Type': 'application/json'
@@ -259,7 +259,7 @@ def main():
     
     # Step 3: Test profiles API
     print_header("Step 2: Testing Profiles API")
-    success, error, profiles = test_profiles_api(access_token, region)
+    success, error, profiles = test_profiles_api(access_token, region, client_id)
     
     if not success:
         print_error(f"Profiles API test failed: {error}")
@@ -289,7 +289,7 @@ def main():
     
     if profile_to_test and profile_to_test != 'YOUR_PROFILE_ID_HERE':
         print_header("Step 3: Testing Specific Profile Access")
-        success, error, profile_data = test_specific_profile(access_token, region, profile_to_test)
+        success, error, profile_data = test_specific_profile(access_token, region, profile_to_test, client_id)
         
         if not success:
             print_error(f"Profile access test failed: {error}")
