@@ -33,5 +33,5 @@ ENV PYTHONUNBUFFERED=1
 # Expose port for Cloud Run
 EXPOSE 8080
 
-# Default command - run verification script
-CMD ["python", "verify_repository.py"]
+# Default command - run HTTP server for Cloud Run
+CMD ["python", "server.py"]
