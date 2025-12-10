@@ -1,0 +1,105 @@
+
+{
+  "_comment": "Brand Campaigns Only - Run every 2 hours",
+  "_description": "Optimizes brand campaigns only for tight brand protection",
+  "_version": "2.2.0",
+  
+  "amazon_api": {
+    "region": "NA",
+    "profile_id": "YOUR_PROFILE_ID_HERE",
+    "client_id": "YOUR_CLIENT_ID_HERE",
+    "client_secret": "YOUR_CLIENT_SECRET_HERE",
+    "refresh_token": "YOUR_REFRESH_TOKEN_HERE",
+    
+    "rate_limiting": {
+      "request_delay_seconds": 5.0,
+      "min_delay": 3.0,
+      "max_delay": 15.0,
+      "max_retries": 5,
+      "base_retry_delay": 5,
+      "max_retry_delay": 120,
+      "report_poll_interval": 10.0,
+      "report_max_wait_seconds": 600,
+      "enable_token_bucket": true,
+      "tokens_per_second": 0.2,
+      "bucket_size": 3
+    },
+    
+    "caching": {
+      "enabled": true,
+      "cache_directory": "./cache",
+      "cache_lifetime_hours": 4,
+      "cache_reports": true,
+      "cache_campaigns": true,
+      "cache_keywords": true
+    }
+  },
+  
+  "optimization_rules": {
+    "lookback_days": 14,
+    "min_clicks": 10,
+    "min_spend": 5.0,
+    "target_acos": 0.30,
+    "high_acos": 0.45,
+    "low_acos": 0.20,
+    "min_ctr": 0.003,
+    "up_pct": 0.15,
+    "down_pct": 0.20,
+    "min_bid": 0.25,
+    "max_bid": 5.00,
+    "batch_size": 100,
+    "max_keywords_per_batch": 100
+  },
+  
+  "campaign_management": {
+    "enabled": true,
+    "acos_threshold": 0.35,
+    "min_spend": 20.0,
+    "auto_activate": true,
+    "auto_pause": false
+  },
+  
+  "campaign_filtering": {
+    "_comment": "Filter to brand campaigns only",
+    "enabled": true,
+    "filter_type": "pattern",
+    "patterns": ["Brand", "Branded", "TM", "™"],
+    "case_sensitive": false,
+    "match_type": "contains"
+  },
+  
+  "keyword_discovery": {
+    "enabled": true,
+    "min_clicks": 5,
+    "max_acos": 0.35,
+    "initial_bid": 0.75,
+    "max_keywords_per_run": 50
+  },
+  
+  "negative_keywords": {
+    "enabled": true,
+    "min_spend": 10.0,
+    "max_acos": 0.80,
+    "auto_add": true
+  },
+  
+  "features": {
+    "enabled": [
+      "bid_optimization",
+      "keyword_discovery",
+      "negative_keywords"
+    ]
+  },
+  
+  "logging": {
+    "level": "INFO",
+    "output_dir": "./logs",
+    "audit_trail": true
+  },
+  
+  "execution": {
+    "_comment": "Brand campaigns only - aggressive protection",
+    "recommended_frequency_hours": 2,
+    "description": "Brand campaigns - run every 2 hours during business hours"
+  }
+}
