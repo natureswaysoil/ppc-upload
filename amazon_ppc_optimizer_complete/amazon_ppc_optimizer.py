@@ -612,11 +612,42 @@ class AmazonAdsAPI:
         """Create performance report"""
         try:
             if report_date is None:
-                report_date = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
+                report_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+            else:
+                # Convert from YYYYMMDD to YYYY-MM-DD if needed
+                if len(report_date) == 8 and '-' not in report_date:
+                    report_date = f"{report_date[:4]}-{report_date[4:6]}-{report_date[6:8]}"
+            
+            # Calculate start date (14 days before report date)
+            end_date_obj = datetime.strptime(report_date, '%Y-%m-%d')
+            start_date = (end_date_obj - timedelta(days=14)).strftime('%Y-%m-%d')
+            
+            # Determine report type ID and groupBy based on report_type
+            if report_type == 'keywords':
+                report_type_id = 'spKeywords'
+                group_by = ['keyword']
+            elif report_type == 'campaigns':
+                report_type_id = 'spCampaigns'
+                group_by = ['campaign']
+            elif report_type == 'adGroups':
+                report_type_id = 'spAdGroups'
+                group_by = ['adGroup']
+            else:
+                report_type_id = f'sp{report_type.capitalize()}'
+                group_by = [report_type]
             
             payload = {
-                'reportDate': report_date,
-                'metrics': ','.join(metrics)
+                'startDate': start_date,
+                'endDate': report_date,
+                'adProduct': 'SPONSORED_PRODUCTS',
+                'configuration': {
+                    'adProduct': 'SPONSORED_PRODUCTS',
+                    'columns': metrics,
+                    'reportTypeId': report_type_id,
+                    'format': 'GZIP_JSON',
+                    'groupBy': group_by
+                },
+                'metrics': metrics
             }
             
             if segment:
@@ -624,7 +655,16 @@ class AmazonAdsAPI:
             
             endpoint = f'/v2/sp/{report_type}/report'
             response = self._request('POST', endpoint, json=payload)
+            
+            if response.status_code != 200:
+                logger.error(f"Report Create Failed: {response.text}")
+                return None
+                
             report_id = response.json().get('reportId')
+            
+            if not report_id:
+                logger.error(f"Report Create Failed: {response.text}")
+                return None
             
             logger.info(f"Created report {report_id} (type: {report_type})")
             return report_id

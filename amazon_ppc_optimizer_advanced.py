@@ -330,29 +330,52 @@ def create_product_ad(auth: Auth, base: str, profile_id: str, campaign_id: str,
 def create_sp_report(auth: Auth, base: str, profile_id: str, report_type: str, lookback_days: int) -> str:
     """Create a Sponsored Products report"""
     headers = api_headers(auth, profile_id)
-    since = (datetime.utcnow() - timedelta(days=lookback_days)).strftime("%Y%m%d")
-    until = (datetime.utcnow() - timedelta(days=1)).strftime("%Y%m%d")
+    since = (datetime.utcnow() - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+    until = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
 
     if report_type == "keywords":
         url = f"{base}/v2/sp/keywords/report"
+        columns = ["campaignName", "campaignId", "adGroupName", "adGroupId", "keywordId", "keywordText", 
+                   "matchType", "impressions", "clicks", "cost", "attributedConversions14d", "attributedSales14d"]
         payload = {
-            "reportDate": until,
-            "metrics": "campaignName,campaignId,adGroupName,adGroupId,keywordId,keywordText,matchType,impressions,clicks,cost,attributedConversions14d,attributedSales14d"
+            "startDate": since,
+            "endDate": until,
+            "adProduct": "SPONSORED_PRODUCTS",
+            "configuration": {
+                "adProduct": "SPONSORED_PRODUCTS",
+                "columns": columns,
+                "reportTypeId": "spKeywords",
+                "format": "GZIP_JSON",
+                "groupBy": ["keyword"]
+            },
+            "metrics": columns
         }
     elif report_type == "campaigns":
         url = f"{base}/v2/sp/campaigns/report"
+        columns = ["campaignName", "campaignId", "campaignStatus", "impressions", "clicks", "cost", 
+                   "attributedConversions14d", "attributedSales14d"]
         payload = {
-            "reportDate": until,
-            "metrics": "campaignName,campaignId,campaignStatus,impressions,clicks,cost,attributedConversions14d,attributedSales14d"
+            "startDate": since,
+            "endDate": until,
+            "adProduct": "SPONSORED_PRODUCTS",
+            "configuration": {
+                "adProduct": "SPONSORED_PRODUCTS",
+                "columns": columns,
+                "reportTypeId": "spCampaigns",
+                "format": "GZIP_JSON",
+                "groupBy": ["campaign"]
+            },
+            "metrics": columns
         }
     else:
         raise ValueError(f"Unsupported report_type: {report_type}")
 
     r = requests.post(url, json=payload, headers=headers, timeout=30)
-    r.raise_for_status()
+    if r.status_code != 200:
+        raise RuntimeError(f"Report Create Failed: {r.text}")
     report_id = r.json().get("reportId")
     if not report_id:
-        raise RuntimeError("Failed to create report")
+        raise RuntimeError(f"Report Create Failed: {r.text}")
     return report_id
 
 
