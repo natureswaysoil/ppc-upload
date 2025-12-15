@@ -1,0 +1,164 @@
+
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/amazon_ppc_dashboard/nextjs_space/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  password      String?
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model OptimizerConfig {
+  id                    String   @id @default(cuid())
+  acosThreshold         Float    @default(0.45)
+  lookbackDays          Int      @default(14)
+  bidAdjustmentPercent  Float    @default(0.15)
+  minBid                Float    @default(0.25)
+  maxBid                Float    @default(5.0)
+  runFrequency          Int      @default(2)
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Campaign {
+  id                  String   @id @default(cuid())
+  campaignId          String   @unique
+  name                String
+  status              String
+  budget              Float?
+  budgetType          String?
+  acos                Float?
+  spend               Float?
+  sales               Float?
+  clicks              Int?
+  impressions         Int?
+  conversions         Int?
+  ctr                 Float?
+  cpc                 Float?
+  lastOptimized       DateTime?
+  lastAction          String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  keywords            Keyword[]
+  optimizationLogs    OptimizationLog[]
+}
+
+model Keyword {
+  id              String   @id @default(cuid())
+  keywordId       String   @unique
+  campaignId      String
+  text            String
+  matchType       String
+  bid             Float
+  status          String
+  acos            Float?
+  spend           Float?
+  sales           Float?
+  clicks          Int?
+  impressions     Int?
+  conversions     Int?
+  ctr             Float?
+  cpc             Float?
+  lastOptimized   DateTime?
+  lastAction      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  campaign        Campaign @relation(fields: [campaignId], references: [campaignId])
+  optimizationLogs OptimizationLog[]
+}
+
+model OptimizationRun {
+  id                  String   @id @default(cuid())
+  startTime           DateTime @default(now())
+  endTime             DateTime?
+  status              String   @default("running")
+  totalCampaigns      Int      @default(0)
+  totalKeywords       Int      @default(0)
+  campaignsModified   Int      @default(0)
+  keywordsOptimized   Int      @default(0)
+  actionsPerformed    Int      @default(0)
+  summary             String?
+  reportPath          String?
+  triggeredBy         String   @default("scheduled")
+  optimizationLogs    OptimizationLog[]
+}
+
+model OptimizationLog {
+  id            String   @id @default(cuid())
+  runId         String
+  campaignId    String?
+  keywordId     String?
+  action        String
+  oldValue      String?
+  newValue      String?
+  reason        String?
+  impact        Float?
+  timestamp     DateTime @default(now())
+  
+  run           OptimizationRun @relation(fields: [runId], references: [id])
+  campaign      Campaign?       @relation(fields: [campaignId], references: [campaignId])
+  keyword       Keyword?        @relation(fields: [keywordId], references: [keywordId])
+}
+
+model MetricSnapshot {
+  id            String   @id @default(cuid())
+  date          DateTime
+  totalSpend    Float    @default(0)
+  totalSales    Float    @default(0)
+  totalClicks   Int      @default(0)
+  totalImpressions Int   @default(0)
+  totalConversions Int   @default(0)
+  averageAcos   Float?
+  averageCtr    Float?
+  averageCpc    Float?
+  enabledCampaigns   Int @default(0)
+  pausedCampaigns    Int @default(0)
+  activeKeywords     Int @default(0)
+  createdAt     DateTime @default(now())
+  
+  @@unique([date])
+}

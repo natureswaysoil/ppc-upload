@@ -1,0 +1,110 @@
+
+export const dynamic = "force-dynamic";
+
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/db'
+
+export async function GET(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const searchParams = req.nextUrl.searchParams
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
+
+    // Build date filter
+    const dateFilter: any = {}
+    if (startDate) {
+      dateFilter.gte = new Date(startDate)
+    }
+    if (endDate) {
+      dateFilter.lte = new Date(endDate)
+    }
+
+    // Get metric snapshots for the date range
+    const snapshots = await prisma.metricSnapshot.findMany({
+      where: Object.keys(dateFilter).length > 0 ? { date: dateFilter } : undefined,
+      orderBy: { date: 'asc' },
+      take: 30
+    })
+
+    // If no snapshots found, return mock data
+    if (snapshots.length === 0) {
+      const mockData = generateMockAnalytics(startDate, endDate)
+      return NextResponse.json(mockData)
+    }
+
+    // Transform snapshots to analytics format
+    const performanceData = snapshots.map(snapshot => ({
+      date: snapshot.date.toISOString().split('T')[0],
+      acos: snapshot.averageAcos,
+      spend: snapshot.totalSpend,
+      sales: snapshot.totalSales,
+      clicks: snapshot.totalClicks,
+      conversions: snapshot.totalConversions,
+      roas: snapshot.totalSales > 0 ? snapshot.totalSales / snapshot.totalSpend : 0
+    }))
+
+    // Calculate aggregates
+    const totalSpend = snapshots.reduce((sum, s) => sum + s.totalSpend, 0)
+    const totalSales = snapshots.reduce((sum, s) => sum + s.totalSales, 0)
+    const avgAcos = snapshots.length > 0 ? snapshots.reduce((sum, s) => sum + (s.averageAcos || 0), 0) / snapshots.length : 0
+    const avgRoas = totalSpend > 0 ? totalSales / totalSpend : 0
+
+    return NextResponse.json({
+      performanceData,
+      aggregates: {
+        avgAcos: avgAcos.toFixed(1),
+        totalSpend: totalSpend.toFixed(2),
+        totalSales: totalSales.toFixed(2),
+        avgRoas: avgRoas.toFixed(2)
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching analytics:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+function generateMockAnalytics(startDate: string | null, endDate: string | null) {
+  const data = []
+  const end = endDate ? new Date(endDate) : new Date()
+  const start = startDate ? new Date(startDate) : new Date(end.getTime() - 10 * 24 * 60 * 60 * 1000)
+  
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().split('T')[0]
+    data.push({
+      date: dateStr,
+      acos: 38 + Math.random() * 10,
+      spend: 1200 + Math.random() * 300,
+      sales: 2900 + Math.random() * 500,
+      clicks: 140 + Math.floor(Math.random() * 50),
+      conversions: 12 + Math.floor(Math.random() * 8),
+      roas: 2.2 + Math.random() * 0.5
+    })
+  }
+  
+  const totalSpend = data.reduce((sum, d) => sum + d.spend, 0)
+  const totalSales = data.reduce((sum, d) => sum + d.sales, 0)
+  const avgAcos = data.reduce((sum, d) => sum + d.acos, 0) / data.length
+  const avgRoas = totalSpend > 0 ? totalSales / totalSpend : 0
+  
+  return {
+    performanceData: data,
+    aggregates: {
+      avgAcos: avgAcos.toFixed(1),
+      totalSpend: totalSpend.toFixed(2),
+      totalSales: totalSales.toFixed(2),
+      avgRoas: avgRoas.toFixed(2)
+    }
+  }
+}

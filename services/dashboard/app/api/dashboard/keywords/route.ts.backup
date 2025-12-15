@@ -1,0 +1,149 @@
+
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/db'
+import fs from 'fs'
+import path from 'path'
+
+// Amazon API credentials
+function getAmazonCredentials() {
+  try {
+    const credPath = path.join(process.env.HOME || '/home/ubuntu', 'amazon_ads_credentials.json')
+    const credData = JSON.parse(fs.readFileSync(credPath, 'utf8'))
+    return credData
+  } catch (error) {
+    console.error('Error loading credentials:', error)
+    return null
+  }
+}
+
+async function fetchKeywordsFromAmazon() {
+  const creds = getAmazonCredentials()
+  if (!creds) {
+    throw new Error('Amazon credentials not found')
+  }
+
+  const headers = {
+    'Amazon-Advertising-API-ClientId': creds.client_id,
+    'Authorization': `Bearer ${creds.access_token}`,
+    'Amazon-Advertising-API-Scope': creds.profile_id,
+    'Content-Type': 'application/json'
+  }
+
+  try {
+    // Fetch keywords from Amazon Ads API
+    const response = await fetch(
+      `https://advertising-api.amazon.com/sp/keywords`,
+      { headers }
+    )
+
+    if (!response.ok) {
+      throw new Error(`Amazon API error: ${response.status}`)
+    }
+
+    const keywords = await response.json()
+    return keywords
+  } catch (error) {
+    console.error('Error fetching keywords from Amazon:', error)
+    throw error
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const status = searchParams.get('status')
+    const matchType = searchParams.get('matchType')
+
+    // Try to get keywords from database first
+    let keywords = await prisma.keyword.findMany({
+      where: {
+        ...(status && status !== 'all' ? { status } : {}),
+        ...(matchType && matchType !== 'all' ? { matchType } : {})
+      },
+      orderBy: {
+        updatedAt: 'desc'
+      }
+    })
+
+    // If no keywords in DB, try fetching from Amazon API
+    if (keywords.length === 0) {
+      try {
+        const amazonKeywords = await fetchKeywordsFromAmazon()
+        
+        // Save to database for future use
+        for (const keyword of amazonKeywords) {
+          try {
+            await prisma.keyword.upsert({
+              where: { keywordId: keyword.keywordId.toString() },
+              update: {
+                text: keyword.keywordText || '',
+                matchType: keyword.matchType || 'broad',
+                bid: keyword.bid || 0,
+                status: keyword.state || 'enabled',
+                updatedAt: new Date()
+              },
+              create: {
+                keywordId: keyword.keywordId.toString(),
+                campaignId: keyword.campaignId?.toString() || 'unknown',
+                text: keyword.keywordText || '',
+                matchType: keyword.matchType || 'broad',
+                bid: keyword.bid || 0,
+                status: keyword.state || 'enabled'
+              }
+            })
+          } catch (err) {
+            console.error('Error saving keyword:', err)
+          }
+        }
+
+        // Fetch again from database
+        keywords = await prisma.keyword.findMany({
+          where: {
+            ...(status && status !== 'all' ? { status } : {}),
+            ...(matchType && matchType !== 'all' ? { matchType } : {})
+          },
+          orderBy: {
+            updatedAt: 'desc'
+          }
+        })
+      } catch (amazonError) {
+        console.error('Error fetching from Amazon:', amazonError)
+      }
+    }
+
+    // Transform data for frontend
+    const transformedKeywords = keywords.map(k => ({
+      id: k.id,
+      keywordId: k.keywordId,
+      text: k.text,
+      campaignId: k.campaignId,
+      campaignName: `Campaign ${k.campaignId.substring(0, 8)}...`,
+      matchType: k.matchType,
+      bid: k.bid,
+      status: k.status,
+      acos: k.acos || 0,
+      spend: k.spend || 0,
+      sales: k.sales || 0,
+      clicks: k.clicks || 0,
+      impressions: k.impressions || 0,
+      conversions: k.conversions || 0,
+      ctr: k.ctr || 0,
+      cpc: k.cpc || 0,
+      lastAction: k.lastAction || 'No action yet',
+      lastOptimized: k.lastOptimized?.toISOString() || null,
+      createdAt: k.createdAt.toISOString(),
+      updatedAt: k.updatedAt.toISOString()
+    }))
+
+    return NextResponse.json({
+      keywords: transformedKeywords,
+      total: transformedKeywords.length
+    })
+  } catch (error: any) {
+    console.error('Error in keywords API:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to fetch keywords' },
+      { status: 500 }
+    )
+  }
+}
