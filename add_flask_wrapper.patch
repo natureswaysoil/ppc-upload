@@ -1,0 +1,218 @@
+From 0000000000000000000000000000000000000000 Wed Dec 10 22:00:00 2025 +0000
+From: Copilot <copilot@example.com>
+Date: Wed, 10 Dec 2025 22:00:00 +0000
+Subject: [PATCH] Add Flask wrapper (app.py) and update Dockerfile/requirements for Cloud Run
+
+Add a small Flask HTTP wrapper to run the existing amazon_ppc_automation
+CLI as an HTTP service and adjust the container to run under Gunicorn.
+
+Files added:
+- app.py: Flask wrapper that imports PPCAutomation and executes it in a background thread. Uses an in-memory job_store (non-durable).
+- requirements.txt: Add flask, gunicorn, pyyaml, requests.
+- Dockerfile: Install requirements and run Gunicorn serving app:app on port 8080.
+
+Notes:
+- job_store is in-memory; for production replace with persistent job handling (Cloud Tasks, Pub/Sub, DB).
+- Protect /run with authentication/authorization (Cloud Run IAM or token validation).
+- The CLI (amazon_ppc_automation.py) remains unchanged.
+
+---
+ app.py              | 240 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ Dockerfile          |  34 +++++++
+ requirements.txt    |   4 ++
+ 3 files changed, 278 insertions(+)
+ create mode 100644 app.py
+ create mode 100644 Dockerfile
+ create mode 100644 requirements.txt
+
+diff --git a/app.py b/app.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/app.py
+@@ -0,0 +1,240 @@
++#!/usr/bin/env python3
++"""
++Flask HTTP wrapper for the Amazon PPC Automation CLI.
++
++Endpoints:
++- GET  /                -> service info
++- GET  /health          -> 200 OK
++- POST /run             -> start a job (returns job_id)
++- GET  /status/<job_id> -> job status/result
++
++Notes:
++- This wrapper runs PPCAutomation from amazon_ppc_automation.py in a background thread.
++- Job tracking is in-memory (job_store). For production use a durable store (Cloud Tasks, Pub/Sub, DB).
++- Protect /run with authentication in production (Cloud Run IAM, tokens, etc.).
++"""
++import os
++import uuid
++import threading
++import tempfile
++import time
++import traceback
++from typing import Optional
++
++from flask import Flask, request, jsonify
++
++# Import the automation class from your CLI module
++# Ensure amazon_ppc_automation.py is at the repository root and defines PPCAutomation
++from amazon_ppc_automation import PPCAutomation
++
++app = Flask(__name__)
++
++# Simple in-memory job store (not durable across restarts)
++job_store = {}
++
++def _run_job(job_id: str, config_path: str, profile_id: str, dry_run: bool, features: Optional[list]):
++    job = job_store[job_id]
++    job['status'] = 'running'
++    job['started_at'] = time.time()
++    try:
++        automation = PPCAutomation(config_path, profile_id, dry_run)
++        result = automation.run(features)
++        job['status'] = 'finished'
++        job['result'] = result
++    except Exception as e:
++        job['status'] = 'error'
++        job['error'] = str(e)
++        job['traceback'] = traceback.format_exc()
++    finally:
++        job['finished_at'] = time.time()
++        # Clean up temp config file if created
++        temp_path = job.get('temp_config')
++        if temp_path:
++            try:
++                os.remove(temp_path)
++            except Exception:
++                pass
++
++@app.route('/', methods=['GET'])
++def index():
++    return jsonify({
++        "service": "Amazon PPC Automation",
++        "version": "2.0.0",
++        "endpoints": ["/health", "/run (POST)", "/status/<job_id>"]
++    }), 200
++
++@app.route('/health', methods=['GET'])
++def health():
++    return "ok", 200
++
++@app.route('/run', methods=['POST'])
++def run_job():
++    """
++    Accepts JSON:
++    {
++      "profile_id": "1780498399290938",      # required
++      "config": "<yaml text>",               # OR
++      "config_path": "/app/ppc_config.yaml", # optional if config provided
++      "dry_run": true,
++      "features": ["bid_optimization","dayparting"]
++    }
++    """
++    data = request.get_json(silent=True)
++    if not data:
++        return jsonify({"error": "invalid json body"}), 400
++
++    profile_id = data.get('profile_id')
++    if not profile_id:
++        return jsonify({"error": "profile_id is required"}), 400
++
++    dry_run = bool(data.get('dry_run', False))
++    features = data.get('features')  # can be None
++
++    config_text = data.get('config')
++    config_path = data.get('config_path')
++
++    temp_config = None
++    if config_text:
++        fd, temp_path = tempfile.mkstemp(prefix='ppc_config_', suffix='.yaml')
++        with os.fdopen(fd, 'w') as f:
++            f.write(config_text)
++        config_path = temp_path
++        temp_config = temp_path
++    elif not config_path:
++        return jsonify({"error": "either 'config' (yaml text) or 'config_path' must be provided"}), 400
++
++    # Validate config file exists
++    if not os.path.isfile(config_path):
++        return jsonify({"error": f"config_path not found: {config_path}"}), 400
++
++    job_id = str(uuid.uuid4())
++    job_store[job_id] = {
++        'status': 'queued',
++        'created_at': time.time(),
++        'profile_id': profile_id,
++        'dry_run': dry_run,
++        'features': features,
++    }
++    if temp_config:
++        job_store[job_id]['temp_config'] = temp_config
++
++    # Launch background thread
++    t = threading.Thread(target=_run_job, args=(job_id, config_path, profile_id, dry_run, features), daemon=True)
++    t.start()
++
++    status_url = f"/status/{job_id}"
++    return jsonify({"job_id": job_id, "status": "queued", "status_url": status_url}), 202
++
++@app.route('/status/<job_id>', methods=['GET'])
++def job_status(job_id):
++    job = job_store.get(job_id)
++    if not job:
++        return jsonify({"error": "job not found"}), 404
++    # Hide local temp path in response
++    safe_job = {k: v for k, v in job.items() if k != 'temp_config'}
++    return jsonify(safe_job), 200
++
++if __name__ == '__main__':
++    port = int(os.environ.get('PORT', '8080'))
++    # For local development only. In Cloud Run we will use Gunicorn in Dockerfile.
++    app.run(host='0.0.0.0', port=port)
++
+diff --git a/Dockerfile b/Dockerfile
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/Dockerfile
+@@ -0,0 +1,34 @@
++# Minimal Dockerfile to run the Flask wrapper and the CLI on Cloud Run
++FROM python:3.11-slim
++
++# Set working directory
++WORKDIR /app
++
++# Copy repository files
++COPY . /app
++
++# Install system dependencies (if any) and Python requirements
++RUN apt-get update && apt-get install -y --no-install-recommends \
++    build-essential \
++ && rm -rf /var/lib/apt/lists/*
++
++# Install python packages
++RUN pip install --no-cache-dir -r requirements.txt
++
++# Expose port for Cloud Run
++ENV PORT=8080
++EXPOSE 8080
++
++# Use Gunicorn to serve the Flask app defined in app.py
++# Single worker, 300s timeout suitable for longer-running background tasks (the HTTP request returns immediately)
++CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--timeout", "300", "app:app"]
++
+diff --git a/requirements.txt b/requirements.txt
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/requirements.txt
+@@ -0,0 +1,4 @@
++flask
++gunicorn
++pyyaml
++requests
++
+-- 
+2.34.1

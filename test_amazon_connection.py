@@ -78,8 +78,8 @@ def load_config(config_path: str) -> Dict:
             config = json.load(f)
         return config
     except FileNotFoundError:
-        print_error(f"Configuration file not found: {config_path}")
-        sys.exit(1)
+        print_warning(f"Configuration file not found: {config_path}")
+        return {}
     except json.JSONDecodeError as e:
         print_error(f"Invalid JSON in configuration file: {e}")
         sys.exit(1)
@@ -200,6 +200,37 @@ def test_specific_profile(access_token: str, region: str, profile_id: str) -> Tu
         return False, f"Unexpected error: {str(e)}", None
 
 
+def _get_secret_manager_value(secret_name: str, project_id: Optional[str] = None) -> Optional[str]:
+    """Fetch a secret value from Google Secret Manager if available."""
+    try:
+        # Lazy import to avoid hard dependency when not needed
+        from google.cloud import secretmanager  # type: ignore
+        import os
+        pid = project_id or os.environ.get('GOOGLE_CLOUD_PROJECT') or os.environ.get('GCLOUD_PROJECT')
+        if not pid:
+            return None
+        client = secretmanager.SecretManagerServiceClient()
+        name = f"projects/{pid}/secrets/{secret_name}/versions/latest"
+        response = client.access_secret_version(request={"name": name})
+        payload = response.payload.data.decode('utf-8')
+        return payload.strip()
+    except Exception:
+        return None
+
+
+def _get_credential(name: str, default: str = "") -> str:
+    """Resolve a credential from ENV first, then Secret Manager, else default."""
+    import os
+    val = os.environ.get(name)
+    if val:
+        return val.strip()
+    # Try Secret Manager
+    sm_val = _get_secret_manager_value(name)
+    if sm_val:
+        return sm_val.strip()
+    return default
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Test Amazon Advertising API Connection'
@@ -224,21 +255,18 @@ def main():
     
     # Check if credentials are placeholders
     api_config = config.get('amazon_api', {})
-    client_id = api_config.get('client_id', '')
-    client_secret = api_config.get('client_secret', '')
-    refresh_token = api_config.get('refresh_token', '')
+    # Resolve credentials from ENV/Secret Manager if config missing or placeholders
+    client_id = api_config.get('client_id', '') or _get_credential('AMAZON_CLIENT_ID')
+    client_secret = api_config.get('client_secret', '') or _get_credential('AMAZON_CLIENT_SECRET')
+    refresh_token = api_config.get('refresh_token', '') or _get_credential('AMAZON_REFRESH_TOKEN')
     region = api_config.get('region', 'NA')
-    config_profile_id = api_config.get('profile_id', '')
+    config_profile_id = api_config.get('profile_id', '') or _get_credential('AMAZON_PROFILE_ID')
     
-    if 'YOUR_' in client_id or 'YOUR_' in client_secret or 'YOUR_' in refresh_token:
-        print_error("Configuration contains placeholder values")
-        print_warning("Please update config.json with your actual Amazon API credentials:")
-        print_warning("  - client_id: Your Amazon Advertising API client ID")
-        print_warning("  - client_secret: Your client secret")
-        print_warning("  - refresh_token: Your refresh token")
-        print_warning("  - profile_id: Your profile ID")
-        print()
-        print_info("See API_SETUP_GUIDE.md for instructions on obtaining credentials")
+    if (not client_id or not client_secret or not refresh_token) or \
+       ('YOUR_' in client_id or 'YOUR_' in client_secret or 'YOUR_' in refresh_token):
+        print_error("Missing or placeholder credentials. Set ENV or Secrets:")
+        print_warning("ENV variables (preferred): AMAZON_CLIENT_ID, AMAZON_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AMAZON_PROFILE_ID")
+        print_warning("Or store them in Google Secret Manager with the same names.")
         sys.exit(1)
     
     print_success("Configuration loaded")

@@ -83,6 +83,16 @@ This repository contains **5 comprehensive packages** for Amazon PPC optimizatio
 
 ---
 
+## ☁️ Cloud Run Deployment
+
+Container-ready manifests and deployment guides live under `cloudrun/`:
+- `cloudrun/optimizer/README.md` – Build and deploy the Python optimizer to Cloud Run with optional BigQuery logging.
+- `cloudrun/dashboard/README.md` – Build and deploy the Next.js dashboard container.
+
+Both services have Dockerfiles located in `services/optimizer` and `services/dashboard` respectively, optimized for Artifact Registry and Cloud Run builds.
+
+---
+
 ## ✨ Key Features
 
 ### Automated Bid Optimization

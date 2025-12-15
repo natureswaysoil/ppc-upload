@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pdb
+*.log
+logs/
+audit/
+*.zip
+*.pdf
+*~
