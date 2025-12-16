@@ -1,19 +1,16 @@
+import { DashboardNav } from '@/components/dashboard-layout'
 
-import { getServerSession } from 'next-auth/next'
-import { redirect } from 'next/navigation'
-import { authOptions } from '@/lib/auth'
-import { DashboardLayout } from '@/components/dashboard-layout'
-
-export default async function Layout({
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const session = await getServerSession(authOptions)
-  
-  if (!session) {
-    redirect('/auth/signin')
-  }
-
-  return <DashboardLayout>{children}</DashboardLayout>
+  return (
+    <div className="flex min-h-screen flex-col">
+      <DashboardNav />
+      <main className="flex-1 p-6">
+        {children}
+      </main>
+    </div>
+  )
 }
