@@ -18,12 +18,20 @@ Usage:
 import argparse
 import json
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
-import subprocess
-import tempfile
 from typing import List, Dict, Tuple
+
+# Try to import yaml once at module level for efficiency
+try:
+    import yaml
+    YAML_AVAILABLE = True
+except ImportError:
+    YAML_AVAILABLE = False
 
 # Constants
 MAX_ALLOWED_ERRORS = 5  # Maximum Python syntax errors before marking as failed
@@ -78,34 +86,43 @@ class RepositoryVerifier:
         
         all_passed = True
         
-        # 1. Check repository structure
-        if not self.verify_repository_structure():
-            all_passed = False
+        try:
+            # 1. Check repository structure
+            if not self.verify_repository_structure():
+                all_passed = False
+            
+            # 2. Create temp directory for extraction
+            self.temp_dir = tempfile.mkdtemp()
+            print_info(f"Created temporary directory: {self.temp_dir}")
+            
+            # 3. Verify ZIP files
+            if not self.verify_zip_files():
+                all_passed = False
+            
+            # 4. Verify Python scripts
+            if not self.verify_python_scripts():
+                all_passed = False
+            
+            # 5. Verify configuration files
+            if not self.verify_config_files():
+                all_passed = False
+            
+            # 6. Run test scripts
+            if not self.run_test_scripts():
+                all_passed = False
+            
+            # 7. Generate summary and get final status
+            # The summary determines if we accept the results based on thresholds
+            final_status = self.print_summary()
+            
+        finally:
+            # Cleanup temp directory
+            if self.temp_dir and os.path.exists(self.temp_dir):
+                print_info(f"Cleaning up temporary directory: {self.temp_dir}")
+                shutil.rmtree(self.temp_dir)
+                print_success("Temporary directory cleaned up")
         
-        # 2. Create temp directory for extraction
-        self.temp_dir = tempfile.mkdtemp()
-        print_info(f"Created temporary directory: {self.temp_dir}")
-        
-        # 3. Verify ZIP files
-        if not self.verify_zip_files():
-            all_passed = False
-        
-        # 4. Verify Python scripts
-        if not self.verify_python_scripts():
-            all_passed = False
-        
-        # 5. Verify configuration files
-        if not self.verify_config_files():
-            all_passed = False
-        
-        # 6. Run test scripts
-        if not self.run_test_scripts():
-            all_passed = False
-        
-        # 7. Generate summary
-        self.print_summary()
-        
-        return all_passed
+        return final_status
     
     def verify_repository_structure(self) -> bool:
         """Verify basic repository structure"""
@@ -259,9 +276,14 @@ class RepositoryVerifier:
         # Check YAML files
         yaml_files = list(Path(self.temp_dir).rglob("*.yaml")) + list(Path(self.temp_dir).rglob("*.yml"))
         
+        if not YAML_AVAILABLE and yaml_files:
+            print_warning("PyYAML not installed, skipping YAML validation")
+        
         for yaml_file in yaml_files:
+            if not YAML_AVAILABLE:
+                continue
+                
             try:
-                import yaml
                 with open(yaml_file, 'r', encoding='utf-8') as f:
                     data = yaml.safe_load(f)
                 
@@ -272,8 +294,6 @@ class RepositoryVerifier:
                     'status': 'valid'
                 })
                 
-            except ImportError:
-                print_warning(f"{yaml_file.name}: PyYAML not installed, skipping")
             except Exception as e:
                 print_error(f"{yaml_file.name}: Invalid YAML - {str(e)}")
                 all_valid = False
