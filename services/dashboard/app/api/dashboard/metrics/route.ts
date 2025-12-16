@@ -1,39 +1,32 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/lib/auth'
 import { queryBigQuery } from '@/lib/bigquery'
 
 export async function GET(req: NextRequest) {
   try {
-    // const session = await getServerSession(authOptions)
-    
-    if (false) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Query BigQuery for summary metrics
+    // Query BigQuery for summary metrics using actual schema
     const summaryQuery = `
       SELECT
-        COUNT(DISTINCT campaign_id) as total_campaigns,
-        COUNT(DISTINCT CASE WHEN campaign_status = 'ENABLED' THEN campaign_id END) as enabled_campaigns,
-        COUNT(DISTINCT CASE WHEN campaign_status = 'PAUSED' THEN campaign_id END) as paused_campaigns,
-        COUNT(DISTINCT keyword_id) as total_keywords,
-        SAFE_DIVIDE(SUM(cost), SUM(sales_7d)) as current_acos,
-        SUM(cost) as total_spend,
-        SUM(sales_7d) as total_sales,
-        SUM(clicks) as total_clicks,
-        SUM(conversions_7d) as total_conversions
-      FROM \`amazon-ppc-474902.amazon_ppc_data.keywords\`
-      WHERE DATE(last_updated) >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+        COUNT(DISTINCT c.campaign_id) as total_campaigns,
+        COUNT(DISTINCT CASE WHEN c.state = 'ENABLED' THEN c.campaign_id END) as enabled_campaigns,
+        COUNT(DISTINCT CASE WHEN c.state = 'PAUSED' THEN c.campaign_id END) as paused_campaigns,
+        COUNT(DISTINCT k.keyword_id) as total_keywords,
+        IFNULL(AVG(kp.acos), 0) as current_acos,
+        IFNULL(SUM(kp.cost), 0) as total_spend,
+        IFNULL(SUM(kp.sales), 0) as total_sales,
+        IFNULL(SUM(kp.clicks), 0) as total_clicks,
+        IFNULL(SUM(kp.conversions), 0) as total_conversions
+      FROM \`amazon-ppc-474902.amazon_ppc_data.campaigns\` c
+      LEFT JOIN \`amazon-ppc-474902.amazon_ppc_data.keywords\` k ON c.campaign_id = k.campaign_id
+      LEFT JOIN \`amazon-ppc-474902.amazon_ppc_data.keyword_performance\` kp ON k.keyword_id = kp.keyword_id
     `;
 
     const [summary] = await queryBigQuery(summaryQuery);
 
-    // Get last optimization run time
+    // Get last sync time
     const lastRunQuery = `
-      SELECT MAX(last_updated) as last_run
+      SELECT MAX(sync_timestamp) as last_run
       FROM \`amazon-ppc-474902.amazon_ppc_data.keywords\`
     `;
 
@@ -44,7 +37,7 @@ export async function GET(req: NextRequest) {
       enabledCampaigns: Number(summary?.enabled_campaigns) || 0,
       pausedCampaigns: Number(summary?.paused_campaigns) || 0,
       totalKeywords: Number(summary?.total_keywords) || 0,
-      currentAcos: Number(summary?.current_acos) * 100 || 0,
+      currentAcos: Number(summary?.current_acos) || 0,
       totalSpend: Number(summary?.total_spend) || 0,
       totalSales: Number(summary?.total_sales) || 0,
       totalClicks: Number(summary?.total_clicks) || 0,

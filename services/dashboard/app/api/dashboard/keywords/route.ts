@@ -6,41 +6,43 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const matchType = searchParams.get('matchType')
+    const limit = searchParams.get('limit') || '100'
 
     // Build WHERE clause
     const conditions = ['1=1'];
     
     if (status && status !== 'all') {
-      conditions.push(`keyword_status = '${status.toUpperCase()}'`);
+      conditions.push(`k.state = '${status.toUpperCase()}'`);
     }
     
     if (matchType && matchType !== 'all') {
-      conditions.push(`match_type = '${matchType.toUpperCase()}'`);
+      conditions.push(`k.match_type = '${matchType.toUpperCase()}'`);
     }
 
     const query = `
       SELECT
-        keyword_id,
-        keyword_text,
-        campaign_id,
-        campaign_name,
-        match_type,
-        bid,
-        keyword_status as status,
-        SAFE_DIVIDE(cost, sales_7d) * 100 as acos,
-        cost as spend,
-        sales_7d as sales,
-        clicks,
-        impressions,
-        conversions_7d as conversions,
-        SAFE_DIVIDE(clicks, impressions) * 100 as ctr,
-        SAFE_DIVIDE(cost, clicks) as cpc,
-        last_updated,
-        last_action
-      FROM \`amazon-ppc-474902.amazon_ppc_data.keywords\`
+        k.keyword_id,
+        k.keyword_text,
+        k.campaign_id,
+        c.campaign_name,
+        k.match_type,
+        k.bid,
+        k.state as status,
+        IFNULL(kp.acos, 0) as acos,
+        IFNULL(kp.cost, 0) as spend,
+        IFNULL(kp.sales, 0) as sales,
+        IFNULL(kp.clicks, 0) as clicks,
+        IFNULL(kp.impressions, 0) as impressions,
+        IFNULL(kp.conversions, 0) as conversions,
+        IFNULL(kp.ctr, 0) as ctr,
+        IFNULL(kp.cpc, 0) as cpc,
+        k.sync_timestamp
+      FROM \`amazon-ppc-474902.amazon_ppc_data.keywords\` k
+      LEFT JOIN \`amazon-ppc-474902.amazon_ppc_data.campaigns\` c ON k.campaign_id = c.campaign_id
+      LEFT JOIN \`amazon-ppc-474902.amazon_ppc_data.keyword_performance\` kp ON k.keyword_id = kp.keyword_id
       WHERE ${conditions.join(' AND ')}
-      ORDER BY last_updated DESC
-      LIMIT 1000
+      ORDER BY k.sync_timestamp DESC
+      LIMIT ${limit}
     `;
 
     const keywords = await queryBigQuery(query);
@@ -63,10 +65,10 @@ export async function GET(request: Request) {
       conversions: Number(k.conversions) || 0,
       ctr: Number(k.ctr) || 0,
       cpc: Number(k.cpc) || 0,
-      lastAction: k.last_action || 'No action yet',
-      lastOptimized: k.last_updated || null,
-      createdAt: k.last_updated || new Date().toISOString(),
-      updatedAt: k.last_updated || new Date().toISOString()
+      lastAction: 'Synced from Amazon',
+      lastOptimized: k.sync_timestamp || null,
+      createdAt: k.sync_timestamp || new Date().toISOString(),
+      updatedAt: k.sync_timestamp || new Date().toISOString()
     }));
 
     return NextResponse.json({
