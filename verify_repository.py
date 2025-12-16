@@ -18,6 +18,7 @@ Usage:
 import argparse
 import json
 import os
+import shutil
 import sys
 import zipfile
 from pathlib import Path
@@ -86,24 +87,31 @@ class RepositoryVerifier:
         self.temp_dir = tempfile.mkdtemp()
         print_info(f"Created temporary directory: {self.temp_dir}")
         
-        # 3. Verify ZIP files
-        if not self.verify_zip_files():
-            all_passed = False
+        try:
+            # 3. Verify ZIP files
+            if not self.verify_zip_files():
+                all_passed = False
+            
+            # 4. Verify Python scripts
+            if not self.verify_python_scripts():
+                all_passed = False
+            
+            # 5. Verify configuration files
+            if not self.verify_config_files():
+                all_passed = False
+            
+            # 6. Run test scripts
+            if not self.run_test_scripts():
+                all_passed = False
+            
+            # 7. Generate summary
+            self.print_summary()
         
-        # 4. Verify Python scripts
-        if not self.verify_python_scripts():
-            all_passed = False
-        
-        # 5. Verify configuration files
-        if not self.verify_config_files():
-            all_passed = False
-        
-        # 6. Run test scripts
-        if not self.run_test_scripts():
-            all_passed = False
-        
-        # 7. Generate summary
-        self.print_summary()
+        finally:
+            # Clean up temporary directory
+            if self.temp_dir and os.path.exists(self.temp_dir):
+                print_info(f"Cleaning up temporary directory: {self.temp_dir}")
+                shutil.rmtree(self.temp_dir)
         
         return all_passed
     
@@ -259,25 +267,32 @@ class RepositoryVerifier:
         # Check YAML files
         yaml_files = list(Path(self.temp_dir).rglob("*.yaml")) + list(Path(self.temp_dir).rglob("*.yml"))
         
-        for yaml_file in yaml_files:
+        if yaml_files:
+            # Try to import yaml once for all YAML files
             try:
                 import yaml
-                with open(yaml_file, 'r', encoding='utf-8') as f:
-                    data = yaml.safe_load(f)
-                
-                print_success(f"{yaml_file.name}: Valid YAML")
-                self.results['config_files'].append({
-                    'name': str(yaml_file.relative_to(self.temp_dir)),
-                    'type': 'yaml',
-                    'status': 'valid'
-                })
-                
+                yaml_available = True
             except ImportError:
-                print_warning(f"{yaml_file.name}: PyYAML not installed, skipping")
-            except Exception as e:
-                print_error(f"{yaml_file.name}: Invalid YAML - {str(e)}")
-                all_valid = False
-                self.results['issues'].append(f"Invalid YAML: {yaml_file.name}")
+                print_warning("PyYAML not installed, skipping YAML validation")
+                yaml_available = False
+            
+            if yaml_available:
+                for yaml_file in yaml_files:
+                    try:
+                        with open(yaml_file, 'r', encoding='utf-8') as f:
+                            data = yaml.safe_load(f)
+                        
+                        print_success(f"{yaml_file.name}: Valid YAML")
+                        self.results['config_files'].append({
+                            'name': str(yaml_file.relative_to(self.temp_dir)),
+                            'type': 'yaml',
+                            'status': 'valid'
+                        })
+                        
+                    except Exception as e:
+                        print_error(f"{yaml_file.name}: Invalid YAML - {str(e)}")
+                        all_valid = False
+                        self.results['issues'].append(f"Invalid YAML: {yaml_file.name}")
         
         return all_valid
     
