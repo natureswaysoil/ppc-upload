@@ -1,61 +1,41 @@
-export const dynamic = "force-dynamic";
-
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/lib/auth'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const session = await getServerSession(authOptions)
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(req.url)
-    const status = searchParams.get('status')
-
-    const where = status && status !== 'all' ? { status } : {}
-
     const campaigns = await prisma.campaign.findMany({
-      where,
-      include: {
-        keywords: true,
-      },
       orderBy: {
         updatedAt: 'desc'
       }
     })
 
     // Transform campaigns to match the expected format
-    const transformedCampaigns = campaigns.map(campaign => ({
+    const transformedCampaigns = campaigns.map((campaign: any) => ({
       id: campaign.id,
       campaignId: campaign.campaignId,
       name: campaign.name,
       status: campaign.status,
       budget: campaign.budget,
-      budgetType: campaign.budgetType,
-      acos: campaign.acos,
-      spend: campaign.spend,
-      sales: campaign.sales,
-      clicks: campaign.clicks,
-      impressions: campaign.impressions,
-      conversions: campaign.conversions,
-      ctr: campaign.ctr,
-      cpc: campaign.cpc,
-      lastAction: campaign.lastAction,
-      lastOptimized: campaign.lastOptimized?.toISOString(),
-      keywordCount: campaign.keywords.length,
+      acos: campaign.acos || 0,
+      spend: campaign.spend || 0,
+      sales: campaign.sales || 0,
+      impressions: campaign.impressions || 0,
+      clicks: campaign.clicks || 0,
+      conversions: campaign.conversions || 0,
+      lastAction: campaign.lastAction || 'No action yet',
+      lastOptimized: campaign.lastOptimized?.toISOString() || null,
       createdAt: campaign.createdAt.toISOString(),
-      updatedAt: campaign.updatedAt.toISOString(),
+      updatedAt: campaign.updatedAt.toISOString()
     }))
 
-    return NextResponse.json(transformedCampaigns)
+    return NextResponse.json({
+      campaigns: transformedCampaigns,
+      total: transformedCampaigns.length
+    })
   } catch (error: any) {
-    console.error('Error fetching campaigns:', error)
+    console.error('Error in campaigns API:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch campaigns', details: error.message },
+      { error: error.message || 'Failed to fetch campaigns' },
       { status: 500 }
     )
   }
