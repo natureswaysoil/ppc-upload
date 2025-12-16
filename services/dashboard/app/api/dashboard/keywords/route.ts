@@ -24,24 +24,34 @@ export async function GET(request: Request) {
         k.keyword_id,
         k.keyword_text,
         k.campaign_id,
-        c.campaign_name,
+        c.name as campaign_name,
         k.match_type,
         k.bid,
         k.state as status,
-        IFNULL(kp.acos, 0) as acos,
-        IFNULL(kp.cost, 0) as spend,
-        IFNULL(kp.sales, 0) as sales,
-        IFNULL(kp.clicks, 0) as clicks,
-        IFNULL(kp.impressions, 0) as impressions,
-        IFNULL(kp.conversions, 0) as conversions,
-        IFNULL(kp.ctr, 0) as ctr,
-        IFNULL(kp.cpc, 0) as cpc,
-        k.sync_timestamp
+        COALESCE(SUM(kp.cost), 0) as spend,
+        COALESCE(SUM(kp.sales), 0) as sales,
+        COALESCE(SUM(kp.clicks), 0) as clicks,
+        COALESCE(SUM(kp.impressions), 0) as impressions,
+        COALESCE(SUM(kp.conversions), 0) as conversions,
+        CASE 
+          WHEN SUM(kp.sales) > 0 THEN (SUM(kp.cost) / SUM(kp.sales)) * 100
+          ELSE 0 
+        END as acos,
+        CASE 
+          WHEN SUM(kp.impressions) > 0 THEN (SUM(kp.clicks) / SUM(kp.impressions)) * 100
+          ELSE 0 
+        END as ctr,
+        CASE 
+          WHEN SUM(kp.clicks) > 0 THEN SUM(kp.cost) / SUM(kp.clicks)
+          ELSE 0 
+        END as cpc,
+        MAX(k.sync_timestamp) as sync_timestamp
       FROM \`amazon-ppc-474902.amazon_ppc_data.keywords\` k
       LEFT JOIN \`amazon-ppc-474902.amazon_ppc_data.campaigns\` c ON k.campaign_id = c.campaign_id
       LEFT JOIN \`amazon-ppc-474902.amazon_ppc_data.keyword_performance\` kp ON k.keyword_id = kp.keyword_id
       WHERE ${conditions.join(' AND ')}
-      ORDER BY k.sync_timestamp DESC
+      GROUP BY k.keyword_id, k.keyword_text, k.campaign_id, c.name, k.match_type, k.bid, k.state
+      ORDER BY spend DESC
       LIMIT ${limit}
     `;
 
